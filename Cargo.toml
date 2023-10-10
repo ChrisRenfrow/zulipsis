@@ -1,0 +1,15 @@
+[package]
+name = "zulipsis"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.75"
+clap = { version = "4.4.6", features = ["derive"] }
+crossbeam-channel = "0.5.8"
+ctrlc = "3.4.1"
+rand = "0.8.5"
+serde = { version = "1.0.188", features = ["derive"] }
+toml = "0.8.2"
