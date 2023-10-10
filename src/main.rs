@@ -2,7 +2,7 @@ use anyhow::{Error, Result};
 use clap::Parser;
 use crossbeam_channel::{bounded, select, tick, Receiver};
 
-use rand::{Rng, RngCore};
+use rand::Rng;
 use serde::Deserialize;
 use std::{
     fs,
@@ -83,13 +83,13 @@ fn main() -> Result<(), Error> {
 
     let mut last_send = Instant::now();
 
-    println!("Start: {}", pick_one(&mut rng, &*config.phrases.start));
+    println!("Start: {}", pick_one(&mut rng, &config.phrases.start));
 
     loop {
         select! {
             recv(ticks) -> elapsed => {
                 if last_send + cycle_seconds < elapsed.unwrap() {
-                    println!("Working: {}", pick_one(&mut rng, &*config.phrases.working));
+                    println!("Working: {}", pick_one(&mut rng, &config.phrases.working));
                     last_send = Instant::now();
                 } else {
                     println!("Sleeping...");
@@ -98,7 +98,7 @@ fn main() -> Result<(), Error> {
             }
             recv(ctrl_c_events) -> _ => {
                 println!();
-                println!("User interrupt: Pause: {}", pick_one(&mut rng, &*config.phrases.pause));
+                println!("User interrupt: Pause: {}", pick_one(&mut rng, &config.phrases.pause));
                 break;
             }
         }
