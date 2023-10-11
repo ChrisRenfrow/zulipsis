@@ -7,7 +7,6 @@ use rand::Rng;
 use reqwest::{Client, ClientBuilder, Response};
 use serde::Deserialize;
 use std::{
-    fmt::format,
     fs,
     future::Future,
     time::{Duration, Instant},
@@ -80,7 +79,7 @@ impl<'a> StatusUpdater<'a> {
     }
 
     fn update(
-        self: Self,
+        self,
         status_text: &str,
         away: Option<bool>,
         emoji_name: &str,
