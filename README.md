@@ -94,6 +94,7 @@ pause = "moon"
 
 - [ ] Add default configuration
 - [ ] Add options to control output (--verbose)
+- [ ] Handle common HTTP responses sensibly
 - [ ] Make the program behave as expected when running (and terminating) as daemon
 
 **Maybe:**
