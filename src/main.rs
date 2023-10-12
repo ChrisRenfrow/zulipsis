@@ -37,7 +37,7 @@ struct Api {
 #[derive(Debug, Deserialize)]
 struct Config {
     general: General,
-    phrases: Box<Phrases>,
+    phrases: Phrases,
     emoji: Emoji,
 }
 
@@ -48,9 +48,9 @@ struct General {
 
 #[derive(Debug, Deserialize)]
 struct Phrases {
-    start: Box<[String]>,
-    working: Box<[String]>,
-    pause: Box<[String]>,
+    start: Vec<String>,
+    working: Vec<String>,
+    pause: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
