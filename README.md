@@ -99,4 +99,4 @@ pause = "moon"
 **Maybe:**
 
 - [ ] Make behavior more configurable with different modes
-- [ ] Make it interoperable with other programs (think something like rich-presence à la Discord)
+- [ ] Make it interoperable with other programs (enables the ability to achieve rich-presence à la Discord)
