@@ -2,15 +2,19 @@ use anyhow::{Error, Result};
 use chrono::{DateTime, Local};
 use clap::Parser;
 use crossbeam_channel::{bounded, select, tick, Receiver};
-
 use rand::Rng;
-use reqwest::{Client, ClientBuilder, Response};
-use serde::Deserialize;
 use std::{
     fs,
-    future::Future,
     time::{Duration, Instant},
 };
+
+mod config;
+mod zulip_status;
+mod zuliprc;
+
+use config::Config;
+use zulip_status::{Emoji, ZulipStatus};
+use zuliprc::ZulipRc;
 
 #[derive(Parser)]
 struct Cli {
@@ -20,84 +24,6 @@ struct Cli {
     /// The path to the config
     #[arg(short, long)]
     config: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct ZulipRc {
-    api: Api,
-}
-
-#[derive(Debug, Deserialize)]
-struct Api {
-    email: String,
-    key: String,
-    site: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct Config {
-    general: General,
-    phrases: Phrases,
-    emoji: Emoji,
-}
-
-#[derive(Debug, Deserialize)]
-struct General {
-    cycle_duration_seconds: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct Phrases {
-    start: Vec<String>,
-    working: Vec<String>,
-    pause: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Emoji {
-    start: String,
-    working: String,
-    pause: String,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct StatusUpdater<'a> {
-    client: &'a Client,
-    url: &'a str,
-    email: &'a str,
-    key: &'a str,
-}
-
-impl<'a> StatusUpdater<'a> {
-    fn new(client: &'a Client, url: &'a str, email: &'a str, key: &'a str) -> Self {
-        Self {
-            client,
-            url,
-            email,
-            key,
-        }
-    }
-
-    fn update(
-        self,
-        status_text: &str,
-        away: Option<bool>,
-        emoji_name: &str,
-    ) -> impl Future<Output = Result<Response, reqwest::Error>> {
-        let away_str = match away {
-            Some(true) => "true",
-            _ => "false",
-        };
-        self.client
-            .post(self.url)
-            .basic_auth(self.email, Some(self.key))
-            .form(&[
-                ("status_text", status_text),
-                ("away", away_str),
-                ("emoji_name", emoji_name),
-            ])
-            .send()
-    }
 }
 
 fn ctrl_channel() -> Result<Receiver<()>, ctrlc::Error> {
@@ -123,27 +49,23 @@ async fn main() -> Result<(), Error> {
     let args = Cli::parse();
     let zuliprc: ZulipRc = toml::from_str(&fs::read_to_string(args.zuliprc)?)?;
     let config: Config = toml::from_str(&fs::read_to_string(args.config)?)?;
-
     let mut rng = rand::thread_rng();
-
-    let ctrl_c_events = ctrl_channel()?;
-    let ticks = tick(Duration::from_secs(3));
 
     let email = zuliprc.api.email;
     let key = zuliprc.api.key;
-    let client = ClientBuilder::new().timeout(Duration::new(5, 0)).build()?;
-    let url = format!("{}/api/v1/users/me/status", &zuliprc.api.site);
-    let status = StatusUpdater::new(&client, &url, &email, &key);
-    let cycle_seconds = Duration::from_secs(config.general.cycle_duration_seconds);
+    let status = ZulipStatus::new(zuliprc.api.site, email, key);
 
-    let mut last_send = Instant::now();
+    let ctrl_c_events = ctrl_channel()?;
+    let ticks = tick(Duration::from_secs(3));
+    let cycle_seconds = Duration::from_secs(config.general.cycle_duration_seconds);
 
     let start_phrase = pick_one(&mut rng, &config.phrases.start);
     println!("{} Sending start status: {}", timestamp(), &start_phrase);
     let response = status
-        .update(&start_phrase, None, &config.emoji.start)
+        .set(&start_phrase, Some(Emoji::Name(config.emoji.start)), false)
         .await?;
     println!("{} Response {}", timestamp(), response.status());
+    let mut last_send = Instant::now();
     loop {
         select! {
             recv(ticks) -> elapsed => {
@@ -151,21 +73,18 @@ async fn main() -> Result<(), Error> {
                     let working_phrase = pick_one(&mut rng, &config.phrases.working);
                     println!("{} Sending working status: {}", timestamp(), &working_phrase);
                     let response = status
-                        .update(&working_phrase, None, &config.emoji.working)
+                        .set(&working_phrase, Some(Emoji::Name(config.emoji.working.to_string())), false)
                         .await?;
                     println!("{} Response {}", timestamp(), response.status());
                     last_send = Instant::now();
-                } else {
-
                 }
-
             }
             recv(ctrl_c_events) -> _ => {
                 let pause_phrase = pick_one(&mut rng, &config.phrases.pause);
                 println!();
                 println!("{} User interrupt! Sending pause status: {}", timestamp(), &pause_phrase);
                 let response = status
-                    .update(&pause_phrase, Some(true), &config.emoji.pause)
+                    .set(&pause_phrase, Some(Emoji::Name(config.emoji.pause)), true)
                     .await?;
                 println!("{} Response {}", timestamp(), response.status());
                 break;
