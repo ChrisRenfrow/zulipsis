@@ -93,6 +93,8 @@ pause = "moon"
 **Absolutely:**
 
 - [ ] Add default configuration
+- [ ] Add ability to specify emoji on per-phrase basis
+  - e.g. `["Rewriting it in Rust...", "ferris"]`
 - [ ] Add options to control output (--verbose)
 - [ ] Handle common HTTP responses sensibly
 - [ ] Make the program behave as expected when running (and terminating) as daemon
