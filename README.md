@@ -65,8 +65,8 @@ start = [
 # Sets away to false.
 working = [
 	"Processing...",
-	"Sipping coffee...",
-	"Thinking hard...",
+	["Sipping coffee...", "coffee"], # Specify the name of a unique emoji for any phrase like this.
+	["Thinking hard...", "brain"],
 	"Reading the error...",
 	"Reading the manual...",
     "Listening to the compiler...",
@@ -81,20 +81,20 @@ pause = [
 	"Taking a break...",
 ]
 
-# The name of the emoji to use for each state
+# The name of the emoji to use by default for each state
 [emoji]
 start = "start"
 working = "tools"
-pause = "moon"
+pause = "zzz"
 ```
 
 ## Roadmap
 
 **Absolutely:**
 
-- [ ] Add default configuration
-- [ ] Add ability to specify emoji on per-phrase basis
+- [x] Add ability to specify emoji on per-phrase basis
   - e.g. `["Rewriting it in Rust...", "ferris"]`
+- [ ] Add default configuration
 - [ ] Add options to control output (--verbose)
 - [ ] Handle common HTTP responses sensibly
 - [ ] Make the program behave as expected when running (and terminating) as daemon
