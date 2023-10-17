@@ -12,7 +12,7 @@ mod config;
 mod zulip_status;
 mod zuliprc;
 
-use config::Config;
+use config::{Config, Phrase};
 use zulip_status::{Emoji, ZulipStatus};
 use zuliprc::ZulipRc;
 
@@ -35,13 +35,23 @@ fn ctrl_channel() -> Result<Receiver<()>, ctrlc::Error> {
     Ok(receiver)
 }
 
-fn pick_one(rng: &mut impl Rng, list: &[String]) -> String {
-    list[rng.gen_range(0..list.len())].to_string()
+fn pick_one<T>(rng: &mut impl Rng, list: &[T]) -> T
+where
+    T: Clone,
+{
+    list[rng.gen_range(0..list.len())].clone()
 }
 
 fn timestamp() -> String {
     let current_datetime: DateTime<Local> = Local::now();
     current_datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+fn phrase_with_emoji_or_default(phrase: Phrase, default_emoji: Emoji) -> (String, Emoji) {
+    match phrase {
+        Phrase::Basic(phrase_str) => (phrase_str, default_emoji),
+        Phrase::Emoji((phrase_str, emoji_str)) => (phrase_str, Emoji::Name(emoji_str)),
+    }
 }
 
 #[tokio::main]
@@ -59,32 +69,39 @@ async fn main() -> Result<(), Error> {
     let ticks = tick(Duration::from_secs(3));
     let cycle_seconds = Duration::from_secs(config.general.cycle_duration_seconds);
 
-    let start_phrase = pick_one(&mut rng, &config.phrases.start);
-    println!("{} Sending start status: {}", timestamp(), &start_phrase);
-    let response = status
-        .set(&start_phrase, Some(Emoji::Name(config.emoji.start)), false)
-        .await?;
+    let (start_phrase, emoji) = phrase_with_emoji_or_default(
+        pick_one(&mut rng, &config.phrases.start),
+        Emoji::Name(config.emoji.start),
+    );
+    println!("{} Selected start status: {}", timestamp(), &start_phrase);
+    let response = status.set(&start_phrase, Some(emoji), false).await?;
     println!("{} Response {}", timestamp(), response.status());
     let mut last_send = Instant::now();
     loop {
         select! {
             recv(ticks) -> elapsed => {
                 if last_send + cycle_seconds < elapsed.unwrap() {
-                    let working_phrase = pick_one(&mut rng, &config.phrases.working);
+                    let (working_phrase, emoji) = phrase_with_emoji_or_default(
+                        pick_one(&mut rng, &config.phrases.working),
+                        Emoji::Name(config.emoji.working.to_string())
+                    );
                     println!("{} Sending working status: {}", timestamp(), &working_phrase);
                     let response = status
-                        .set(&working_phrase, Some(Emoji::Name(config.emoji.working.to_string())), false)
+                        .set(&working_phrase, Some(emoji), false)
                         .await?;
                     println!("{} Response {}", timestamp(), response.status());
                     last_send = Instant::now();
                 }
             }
             recv(ctrl_c_events) -> _ => {
-                let pause_phrase = pick_one(&mut rng, &config.phrases.pause);
+                let (pause_phrase, emoji) = phrase_with_emoji_or_default(
+                    pick_one(&mut rng, &config.phrases.pause),
+                    Emoji::Name(config.emoji.pause)
+                );
                 println!();
                 println!("{} User interrupt! Sending pause status: {}", timestamp(), &pause_phrase);
                 let response = status
-                    .set(&pause_phrase, Some(Emoji::Name(config.emoji.pause)), true)
+                    .set(&pause_phrase, Some(emoji), true)
                     .await?;
                 println!("{} Response {}", timestamp(), response.status());
                 break;
