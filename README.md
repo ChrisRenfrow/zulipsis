@@ -25,13 +25,14 @@ Use this software at your own discretion. At the time of writing I've spent only
 ## Usage
 
 ``` txt
-Usage: zulipsis --zuliprc <ZULIPRC> --config <CONFIG>
+Usage: zulipsis [OPTIONS] --zuliprc <ZULIPRC> --config <CONFIG>
 
 Options:
   -z, --zuliprc <ZULIPRC>  The path to zuliprc
   -c, --config <CONFIG>    The path to the config
+  -s, --skip <SKIP>        Skip sending the start and/or pause statuses [possible values: start, pause, both]
   -h, --help               Print help
-```
+  ```
 
 ### Where do I find my zuliprc?
 
