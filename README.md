@@ -5,18 +5,15 @@ A silly program that randomly changes your Zulip status at a defined interval. T
 **Example:**
 
 ``` txt
-2023-10-11 09:43:31 Sending start status: Reticulating splines...
-2023-10-11 09:43:32 Response 200 OK
-2023-10-11 09:46:34 Sending working status: Re-reading the manual...
-2023-10-11 09:46:35 Response 200 OK
+[2023-10-19T19:32:30Z INFO  zulipsis] Sending working status: Sipping coffee...
+[2023-10-19T19:37:31Z INFO  zulipsis] Sending working status: Learning generously...
+[2023-10-19T19:42:32Z INFO  zulipsis] Sending working status: Re-reading the manual...
 ```
 Later...
 ``` txt
-2023-10-11 11:02:49 Sending working status: Meow~...
-2023-10-11 11:02:50 Response 200 OK
+[2023-10-19T19:52:34Z INFO  zulipsis] Sending working status: Re-reading the error...
 ^C
-2023-10-11 11:03:06 User interrupt! Sending pause status: Hibernating...
-2023-10-11 11:03:06 Response 200 OK
+[2023-10-19T19:56:17Z INFO  zulipsis] Interrupt received. Sending pause status: Taking a break...
 ```
 
 ## Disclaimer
@@ -31,8 +28,10 @@ Options:
   -z, --zuliprc <ZULIPRC>  The path to zuliprc
   -c, --config <CONFIG>    The path to the config
   -s, --skip <SKIP>        Skip sending the start and/or pause statuses [possible values: start, pause, both]
+  -v, --verbose...         More output per occurrence
+  -q, --quiet...           Less output per occurrence
   -h, --help               Print help
-  ```
+```
 
 ### Where do I find my zuliprc?
 
