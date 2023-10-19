@@ -1,6 +1,6 @@
 use anyhow::{Error, Result};
 use chrono::{DateTime, Local};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use crossbeam_channel::{bounded, select, tick, Receiver};
 use rand::Rng;
 use std::{
@@ -24,6 +24,16 @@ struct Cli {
     /// The path to the config
     #[arg(short, long)]
     config: String,
+    /// Skip sending the start and/or pause statuses
+    #[arg(short, long)]
+    skip: Option<SkipPhase>,
+}
+
+#[derive(Debug, Clone, PartialEq, ValueEnum)]
+enum SkipPhase {
+    Start,
+    Pause,
+    Both,
 }
 
 fn ctrl_channel() -> Result<Receiver<()>, ctrlc::Error> {
@@ -59,6 +69,14 @@ async fn main() -> Result<(), Error> {
     let args = Cli::parse();
     let zuliprc: ZulipRc = toml::from_str(&fs::read_to_string(args.zuliprc)?)?;
     let config: Config = toml::from_str(&fs::read_to_string(args.config)?)?;
+    let (skip_start, skip_end) = match args.skip {
+        Some(skip) => match skip {
+            SkipPhase::Start => (true, false),
+            SkipPhase::Pause => (false, true),
+            _ => (true, true),
+        },
+        _ => (false, false),
+    };
     let mut rng = rand::thread_rng();
 
     let email = zuliprc.api.email;
@@ -69,13 +87,15 @@ async fn main() -> Result<(), Error> {
     let ticks = tick(Duration::from_secs(3));
     let cycle_seconds = Duration::from_secs(config.general.cycle_duration_seconds);
 
-    let (start_phrase, emoji) = phrase_with_emoji_or_default(
-        pick_one(&mut rng, &config.phrases.start),
-        Emoji::Name(config.emoji.start),
-    );
-    println!("{} Selected start status: {}", timestamp(), &start_phrase);
-    let response = status.set(&start_phrase, Some(emoji), false).await?;
-    println!("{} Response {}", timestamp(), response.status());
+    if !skip_start {
+        let (start_phrase, emoji) = phrase_with_emoji_or_default(
+            pick_one(&mut rng, &config.phrases.start),
+            Emoji::Name(config.emoji.start),
+        );
+        println!("{} Selected start status: {}", timestamp(), &start_phrase);
+        let response = status.set(&start_phrase, Some(emoji), false).await?;
+        println!("{} Response {}", timestamp(), response.status());
+    }
     let mut last_send = Instant::now();
     loop {
         select! {
@@ -94,16 +114,20 @@ async fn main() -> Result<(), Error> {
                 }
             }
             recv(ctrl_c_events) -> _ => {
-                let (pause_phrase, emoji) = phrase_with_emoji_or_default(
-                    pick_one(&mut rng, &config.phrases.pause),
-                    Emoji::Name(config.emoji.pause)
-                );
                 println!();
-                println!("{} User interrupt! Sending pause status: {}", timestamp(), &pause_phrase);
-                let response = status
-                    .set(&pause_phrase, Some(emoji), true)
-                    .await?;
-                println!("{} Response {}", timestamp(), response.status());
+                if !skip_end {
+                    let (pause_phrase, emoji) = phrase_with_emoji_or_default(
+                        pick_one(&mut rng, &config.phrases.pause),
+                        Emoji::Name(config.emoji.pause)
+                    );
+                    println!("{} User interrupt! Sending pause status: {}", timestamp(), &pause_phrase);
+                    let response = status
+                        .set(&pause_phrase, Some(emoji), true)
+                        .await?;
+                    println!("{} Response {}", timestamp(), response.status());
+                } else {
+                    println!("{} User interrupt!", timestamp());
+                }
                 break;
             }
         }
