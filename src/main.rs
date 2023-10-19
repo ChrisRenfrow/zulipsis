@@ -87,6 +87,7 @@ async fn main() -> Result<(), Error> {
     let ticks = tick(Duration::from_secs(3));
     let cycle_seconds = Duration::from_secs(config.general.cycle_duration_seconds);
 
+    let mut last_send = Instant::now();
     if !skip_start {
         let (start_phrase, emoji) = phrase_with_emoji_or_default(
             pick_one(&mut rng, &config.phrases.start),
@@ -95,8 +96,10 @@ async fn main() -> Result<(), Error> {
         println!("{} Selected start status: {}", timestamp(), &start_phrase);
         let response = status.set(&start_phrase, Some(emoji), false).await?;
         println!("{} Response {}", timestamp(), response.status());
+    } else {
+        // Turn back the clock to trigger sending a working phrase shortly after starting
+        last_send = Instant::now() - cycle_seconds;
     }
-    let mut last_send = Instant::now();
     loop {
         select! {
             recv(ticks) -> elapsed => {
