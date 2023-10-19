@@ -94,8 +94,8 @@ pause = "zzz"
 
 - [x] Add ability to specify emoji on per-phrase basis
   - e.g. `["Rewriting it in Rust...", "ferris"]`
+- [x] Add options to control output (--verbose)
 - [ ] Add default configuration
-- [ ] Add options to control output (--verbose)
 - [ ] Handle common HTTP responses sensibly
 - [ ] Make the program behave as expected when running (and terminating) as daemon
 
