@@ -9,8 +9,11 @@ edition = "2021"
 anyhow = "1.0.75"
 chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["derive"] }
+clap-verbosity-flag = "2.0.1"
 crossbeam-channel = "0.5.8"
 ctrlc = "3.4.1"
+env_logger = "0.10.0"
+log = "0.4.20"
 rand = "0.8.5"
 reqwest = "0.11.22"
 serde = { version = "1.0.188", features = ["derive"] }

@@ -1,7 +1,8 @@
 use anyhow::{Error, Result};
-use chrono::{DateTime, Local};
 use clap::{Parser, ValueEnum};
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 use crossbeam_channel::{bounded, select, tick, Receiver};
+use log::{debug, info};
 use rand::Rng;
 use std::{
     fs,
@@ -27,6 +28,8 @@ struct Cli {
     /// Skip sending the start and/or pause statuses
     #[arg(short, long)]
     skip: Option<SkipPhase>,
+    #[command(flatten)]
+    verbose: Verbosity<InfoLevel>,
 }
 
 #[derive(Debug, Clone, PartialEq, ValueEnum)]
@@ -52,11 +55,6 @@ where
     list[rng.gen_range(0..list.len())].clone()
 }
 
-fn timestamp() -> String {
-    let current_datetime: DateTime<Local> = Local::now();
-    current_datetime.format("%Y-%m-%d %H:%M:%S").to_string()
-}
-
 fn phrase_with_emoji_or_default(phrase: Phrase, default_emoji: Emoji) -> (String, Emoji) {
     match phrase {
         Phrase::Basic(phrase_str) => (phrase_str, default_emoji),
@@ -67,6 +65,10 @@ fn phrase_with_emoji_or_default(phrase: Phrase, default_emoji: Emoji) -> (String
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let args = Cli::parse();
+    env_logger::Builder::new()
+        .filter_level(args.verbose.log_level_filter())
+        .init();
+
     let zuliprc: ZulipRc = toml::from_str(&fs::read_to_string(args.zuliprc)?)?;
     let config: Config = toml::from_str(&fs::read_to_string(args.config)?)?;
     let (skip_start, skip_end) = match args.skip {
@@ -77,6 +79,7 @@ async fn main() -> Result<(), Error> {
         },
         _ => (false, false),
     };
+
     let mut rng = rand::thread_rng();
 
     let email = zuliprc.api.email;
@@ -84,7 +87,7 @@ async fn main() -> Result<(), Error> {
     let status = ZulipStatus::new(zuliprc.api.site, email, key);
 
     let ctrl_c_events = ctrl_channel()?;
-    let ticks = tick(Duration::from_secs(3));
+    let ticks = tick(Duration::from_secs(1));
     let cycle_seconds = Duration::from_secs(config.general.cycle_duration_seconds);
 
     let mut last_send = Instant::now();
@@ -93,13 +96,15 @@ async fn main() -> Result<(), Error> {
             pick_one(&mut rng, &config.phrases.start),
             Emoji::Name(config.emoji.start),
         );
-        println!("{} Selected start status: {}", timestamp(), &start_phrase);
+        info!("Sending start status: {}", &start_phrase);
         let response = status.set(&start_phrase, Some(emoji), false).await?;
-        println!("{} Response {}", timestamp(), response.status());
+        debug!("Response: {}", response.status());
     } else {
+        info!("Skipping start status");
         // Turn back the clock to trigger sending a working phrase shortly after starting
         last_send = Instant::now() - cycle_seconds;
     }
+
     loop {
         select! {
             recv(ticks) -> elapsed => {
@@ -108,11 +113,11 @@ async fn main() -> Result<(), Error> {
                         pick_one(&mut rng, &config.phrases.working),
                         Emoji::Name(config.emoji.working.to_string())
                     );
-                    println!("{} Sending working status: {}", timestamp(), &working_phrase);
+                    info!("Sending working status: {}", &working_phrase);
                     let response = status
                         .set(&working_phrase, Some(emoji), false)
                         .await?;
-                    println!("{} Response {}", timestamp(), response.status());
+                    debug!("Response {}", response.status());
                     last_send = Instant::now();
                 }
             }
@@ -123,13 +128,13 @@ async fn main() -> Result<(), Error> {
                         pick_one(&mut rng, &config.phrases.pause),
                         Emoji::Name(config.emoji.pause)
                     );
-                    println!("{} User interrupt! Sending pause status: {}", timestamp(), &pause_phrase);
+                    info!("Interrupt received. Sending pause status: {}", &pause_phrase);
                     let response = status
                         .set(&pause_phrase, Some(emoji), true)
                         .await?;
-                    println!("{} Response {}", timestamp(), response.status());
+                    debug!("Response {}", response.status());
                 } else {
-                    println!("{} User interrupt!", timestamp());
+                    info!("Interrupt received. Skipping pause status.");
                 }
                 break;
             }
