@@ -4,8 +4,10 @@ use clap_verbosity_flag::{InfoLevel, Verbosity};
 use crossbeam_channel::{bounded, select, tick, Receiver};
 use log::{debug, info};
 use rand::Rng;
+
 use std::{
     fs,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
@@ -21,10 +23,10 @@ use zuliprc::ZulipRc;
 struct Cli {
     /// The path to zuliprc
     #[arg(short, long)]
-    zuliprc: String,
+    zuliprc: Option<String>,
     /// The path to the config
     #[arg(short, long)]
-    config: String,
+    config: Option<String>,
     /// Skip sending the start and/or pause statuses
     #[arg(short, long)]
     skip: Option<SkipPhase>,
@@ -69,8 +71,56 @@ async fn main() -> Result<(), Error> {
         .filter_level(args.verbose.log_level_filter())
         .init();
 
-    let zuliprc: ZulipRc = toml::from_str(&fs::read_to_string(args.zuliprc)?)?;
-    let config: Config = toml::from_str(&fs::read_to_string(args.config)?)?;
+    // TODO: Prompt to create config path on first run?
+    //       Maybe also Zulip login inline (like zulip cli client) to fetch zuliprc?
+    //       ty @erikareads
+
+    // Use $XDG_CONFIG_HOME
+    let mut config_dir: PathBuf = match std::env::var("XDG_CONFIG_HOME") {
+        Ok(path) => Path::new(&path).to_path_buf(),
+        // Or use `$HOME/.config``
+        _ => Path::new(
+            &std::env::var("HOME")
+                .expect("Couldn't find HOME directory! Something is terribly wrong!"),
+        )
+        .join(".config"),
+    };
+    // Append `zulipsis` directory
+    config_dir.push("zulipsis");
+    // create director(y|ies)
+    let _ = fs::create_dir_all(&config_dir);
+    let config_dir = config_dir.into_boxed_path();
+    // Construct the `zuliprc` path
+    let zuliprc_path = config_dir.join("zuliprc");
+    // Construct the `config.toml` path
+    let config_path = config_dir.join("config.toml");
+
+    // Check if zuliprc argument exists
+    let zuliprc: ZulipRc = match args.zuliprc {
+        // Use zuliprc path from argument
+        Some(path) => toml::from_str(&fs::read_to_string(path)?)?,
+        // Otherwise check if zuliprc path exists
+        None => match zuliprc_path.try_exists() {
+            // Use zuliprc from path
+            Ok(true) => toml::from_str(&fs::read_to_string(zuliprc_path)?)?,
+            // No zuliprc provided, we can't proceed
+            // TODO: Don't use panic for user-facing errors (ty @erikareads)
+            Ok(false) => panic!("zuliprc file doesn't exist"),
+            // Or potential file-system error
+            Err(_) => panic!("File-system error! Probably!"),
+        },
+    };
+
+    // Practically the same as the above (DRY potential)
+    let config: Config = match args.config {
+        Some(path) => toml::from_str(&fs::read_to_string(path)?)?,
+        None => match config_path.try_exists() {
+            Ok(true) => toml::from_str(&fs::read_to_string(config_path)?)?,
+            Ok(false) => panic!("config.toml doesn't exist"),
+            Err(_) => panic!("File-system error! Probably!"),
+        },
+    };
+
     let (skip_start, skip_end) = match args.skip {
         Some(skip) => match skip {
             SkipPhase::Start => (true, false),
