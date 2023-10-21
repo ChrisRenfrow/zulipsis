@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::{bail, Error, Result};
 use clap::{Parser, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use crossbeam_channel::{bounded, select, tick, Receiver};
@@ -104,10 +104,12 @@ async fn main() -> Result<(), Error> {
             // Use zuliprc from path
             Ok(true) => toml::from_str(&fs::read_to_string(zuliprc_path)?)?,
             // No zuliprc provided, we can't proceed
-            // TODO: Don't use panic for user-facing errors (ty @erikareads)
-            Ok(false) => panic!("zuliprc file doesn't exist"),
-            // Or potential file-system error
-            Err(_) => panic!("File-system error! Probably!"),
+            Ok(false) => bail!("Required file doesn't exist: {}", zuliprc_path.display()),
+            // Can't check if file exists at path, permissions error
+            Err(_) => bail!(
+                "Not permitted to check if file exists: {}",
+                zuliprc_path.display()
+            ),
         },
     };
 
@@ -116,8 +118,11 @@ async fn main() -> Result<(), Error> {
         Some(path) => toml::from_str(&fs::read_to_string(path)?)?,
         None => match config_path.try_exists() {
             Ok(true) => toml::from_str(&fs::read_to_string(config_path)?)?,
-            Ok(false) => panic!("config.toml doesn't exist"),
-            Err(_) => panic!("File-system error! Probably!"),
+            Ok(false) => bail!("Required file doesn't exist: {}", config_path.display()),
+            Err(_) => bail!(
+                "Not permitted to check if file exists: {}",
+                config_path.display()
+            ),
         },
     };
 
