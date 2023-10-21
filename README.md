@@ -22,7 +22,7 @@ Use this software at your own discretion. At the time of writing I've spent only
 ## Usage
 
 ``` txt
-Usage: zulipsis [OPTIONS] --zuliprc <ZULIPRC> --config <CONFIG>
+Usage: zulipsis [OPTIONS]
 
 Options:
   -z, --zuliprc <ZULIPRC>  The path to zuliprc
@@ -95,9 +95,11 @@ pause = "zzz"
 - [x] Add ability to specify emoji on per-phrase basis
   - e.g. `["Rewriting it in Rust...", "ferris"]`
 - [x] Add options to control output (--verbose)
-- [ ] Add default configuration
-- [ ] Handle common HTTP responses sensibly
-- [ ] Make the program behave as expected when running (and terminating) as daemon
+- [x] Add default configuration search paths (making --config and --zuliprc optional)
+- [ ] Add argument to generate default configuration
+- [ ] Optionally retry when encountering (potentially) temporary network interference
+- [ ] Respond to SIGKILL like it responds to SIGINT
+  - [ ] Abort if receiving more than one SIGINT/SIGKILL
 
 **Maybe:**
 
