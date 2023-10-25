@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-
+// Test
 mod config;
 mod zulip_status;
 mod zuliprc;
