@@ -3,7 +3,7 @@ use clap::{Parser, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use crossbeam_channel::{bounded, select, tick, Receiver};
 use log::{debug, info};
-use rand::Rng;
+use rand::{rngs::ThreadRng, Rng};
 
 use std::{
     fs,
@@ -126,6 +126,51 @@ fn get_config_and_zuliprc(
     ))
 }
 
+#[derive(Debug)]
+enum Phase {
+    Start,
+    Working,
+    Pause,
+}
+
+struct Zulipsis {
+    rng: ThreadRng,
+    config: Config,
+    status: ZulipStatus,
+}
+
+impl Zulipsis {
+    fn new(config: Config, status: ZulipStatus) -> Self {
+        Self {
+            rng: rand::thread_rng(),
+            config,
+            status,
+        }
+    }
+
+    async fn set_status_for_phase(&mut self, phase: Phase) -> Result<(), Error> {
+        let (phrase, emoji) = match phase {
+            Phase::Start => phrase_with_emoji_or_default(
+                pick_one(&mut self.rng, &self.config.phrases.start),
+                Emoji::Name(self.config.emoji.start.clone()),
+            ),
+            Phase::Working => phrase_with_emoji_or_default(
+                pick_one(&mut self.rng, &self.config.phrases.working),
+                Emoji::Name(self.config.emoji.working.clone()),
+            ),
+            Phase::Pause => phrase_with_emoji_or_default(
+                pick_one(&mut self.rng, &self.config.phrases.pause),
+                Emoji::Name(self.config.emoji.pause.clone()),
+            ),
+        };
+        info!("Sending {:?} status: {}", phase, &phrase);
+        match self.status.set(&phrase, Some(emoji), false).await {
+            Ok(response) => Ok(debug!("Response: {}", response.status())),
+            Err(e) => bail!("Problem sending status: {e}"),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let args = Cli::parse();
@@ -147,24 +192,17 @@ async fn main() -> Result<(), Error> {
         _ => (false, false),
     };
 
-    let mut rng = rand::thread_rng();
+    let cycle_seconds = Duration::from_secs(config.general.cycle_duration_seconds);
     let email = zuliprc.api.email;
     let key = zuliprc.api.key;
-    let status = ZulipStatus::new(zuliprc.api.site, email, key);
+    let mut zulipsis = Zulipsis::new(config, ZulipStatus::new(zuliprc.api.site, email, key));
 
     let ctrl_c_events = ctrl_channel()?;
     let ticks = tick(Duration::from_secs(1));
-    let cycle_seconds = Duration::from_secs(config.general.cycle_duration_seconds);
 
     let mut last_send = Instant::now();
     if !skip_start {
-        let (start_phrase, emoji) = phrase_with_emoji_or_default(
-            pick_one(&mut rng, &config.phrases.start),
-            Emoji::Name(config.emoji.start),
-        );
-        info!("Sending start status: {}", &start_phrase);
-        let response = status.set(&start_phrase, Some(emoji), false).await?;
-        debug!("Response: {}", response.status());
+        zulipsis.set_status_for_phase(Phase::Start).await?;
     } else {
         info!("Skipping start status");
         // Turn back the clock to trigger sending a working phrase shortly after starting
@@ -175,30 +213,14 @@ async fn main() -> Result<(), Error> {
         select! {
             recv(ticks) -> elapsed => {
                 if last_send + cycle_seconds < elapsed.unwrap() {
-                    let (working_phrase, emoji) = phrase_with_emoji_or_default(
-                        pick_one(&mut rng, &config.phrases.working),
-                        Emoji::Name(config.emoji.working.to_string())
-                    );
-                    info!("Sending working status: {}", &working_phrase);
-                    let response = status
-                        .set(&working_phrase, Some(emoji), false)
-                        .await?;
-                    debug!("Response {}", response.status());
+                    zulipsis.set_status_for_phase(Phase::Working).await?;
                     last_send = Instant::now();
                 }
             }
             recv(ctrl_c_events) -> _ => {
                 println!();
                 if !skip_end {
-                    let (pause_phrase, emoji) = phrase_with_emoji_or_default(
-                        pick_one(&mut rng, &config.phrases.pause),
-                        Emoji::Name(config.emoji.pause)
-                    );
-                    info!("Interrupt received. Sending pause status: {}", &pause_phrase);
-                    let response = status
-                        .set(&pause_phrase, Some(emoji), true)
-                        .await?;
-                    debug!("Response {}", response.status());
+                    zulipsis.set_status_for_phase(Phase::Pause).await?;
                 } else {
                     info!("Interrupt received. Skipping pause status.");
                 }
