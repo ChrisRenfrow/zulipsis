@@ -82,7 +82,7 @@ fn get_config(path: PathBuf) -> Result<Config, Error> {
             Ok(config) => Ok(config),
             Err(e) => Err(anyhow!("Problem parsing config: {e}")),
         },
-        Ok(false) => bail!("Required file doesn't exist: {}", path.display()),
+        Ok(false) => bail!("Specified file does not exist: {}", path.display()),
         Err(_) => bail!("Not permitted to check if file exists: {}", path.display()),
     }
 }
@@ -93,7 +93,7 @@ fn get_zuliprc(path: PathBuf) -> Result<ZulipRc, Error> {
             Ok(zuliprc) => Ok(zuliprc),
             Err(e) => Err(anyhow!("Problem parsing zuliprc: {e}")),
         },
-        Ok(false) => bail!("Required file doesn't exist: {}", path.display()),
+        Ok(false) => bail!("Specified file does not exist: {}", path.display()),
         Err(_) => bail!("Not permitted to check if file exists: {}", path.display()),
     }
 }
