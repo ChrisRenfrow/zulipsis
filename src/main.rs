@@ -1,4 +1,4 @@
-use anyhow::{bail, Error, Result};
+use anyhow::{anyhow, bail, Error, Result};
 use clap::{Parser, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use crossbeam_channel::{bounded, select, tick, Receiver};
@@ -64,6 +64,68 @@ fn phrase_with_emoji_or_default(phrase: Phrase, default_emoji: Emoji) -> (String
     }
 }
 
+fn get_config_home() -> PathBuf {
+    match std::env::var("XDG_CONFIG_HOME") {
+        Ok(path) => Path::new(&path).to_path_buf(),
+        // Or use `$HOME/.config``
+        _ => Path::new(
+            &std::env::var("HOME")
+                .expect("Couldn't find HOME directory! Something is terribly wrong!"),
+        )
+        .join(".config"),
+    }
+}
+
+fn get_config(path: PathBuf) -> Result<Config, Error> {
+    match path.try_exists() {
+        Ok(true) => match toml::from_str(&fs::read_to_string(path)?) {
+            Ok(config) => Ok(config),
+            Err(e) => Err(anyhow!("Problem parsing config: {e}")),
+        },
+        Ok(false) => bail!("Required file doesn't exist: {}", path.display()),
+        Err(_) => bail!("Not permitted to check if file exists: {}", path.display()),
+    }
+}
+
+fn get_zuliprc(path: PathBuf) -> Result<ZulipRc, Error> {
+    match path.try_exists() {
+        Ok(true) => match toml::from_str(&fs::read_to_string(path)?) {
+            Ok(zuliprc) => Ok(zuliprc),
+            Err(e) => Err(anyhow!("Problem parsing zuliprc: {e}")),
+        },
+        Ok(false) => bail!("Required file doesn't exist: {}", path.display()),
+        Err(_) => bail!("Not permitted to check if file exists: {}", path.display()),
+    }
+}
+
+fn get_config_and_zuliprc(
+    config_path: Option<String>,
+    zuliprc_path: Option<String>,
+) -> Result<(Config, ZulipRc), Error> {
+    let mut config_home = get_config_home();
+    config_home.push("zulipsis");
+    let config_home = config_home.into_boxed_path();
+    let default_config_path = config_home.join("config.toml");
+    let default_zuliprc_path = config_home.join("zuliprc");
+
+    Ok((
+        match config_path {
+            Some(path) => get_config(path.into())?,
+            None => {
+                fs::create_dir_all(&config_home)?;
+                get_config(default_config_path)?
+            }
+        },
+        match zuliprc_path {
+            Some(path) => get_zuliprc(path.into())?,
+            None => {
+                fs::create_dir_all(&config_home)?;
+                get_zuliprc(default_zuliprc_path)?
+            }
+        },
+    ))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let args = Cli::parse();
@@ -75,57 +137,7 @@ async fn main() -> Result<(), Error> {
     //       Maybe also Zulip login inline (like zulip cli client) to fetch zuliprc?
     //       ty @erikareads
 
-    // Use $XDG_CONFIG_HOME
-    let mut config_dir: PathBuf = match std::env::var("XDG_CONFIG_HOME") {
-        Ok(path) => Path::new(&path).to_path_buf(),
-        // Or use `$HOME/.config``
-        _ => Path::new(
-            &std::env::var("HOME")
-                .expect("Couldn't find HOME directory! Something is terribly wrong!"),
-        )
-        .join(".config"),
-    };
-    // Append `zulipsis` directory
-    config_dir.push("zulipsis");
-    // create director(y|ies)
-    let _ = fs::create_dir_all(&config_dir);
-    let config_dir = config_dir.into_boxed_path();
-    // Construct the `zuliprc` path
-    let zuliprc_path = config_dir.join("zuliprc");
-    // Construct the `config.toml` path
-    let config_path = config_dir.join("config.toml");
-
-    // Check if zuliprc argument exists
-    let zuliprc: ZulipRc = match args.zuliprc {
-        // Use zuliprc path from argument
-        Some(path) => toml::from_str(&fs::read_to_string(path)?)?,
-        // Otherwise check if zuliprc path exists
-        None => match zuliprc_path.try_exists() {
-            // Use zuliprc from path
-            Ok(true) => toml::from_str(&fs::read_to_string(zuliprc_path)?)?,
-            // No zuliprc provided, we can't proceed
-            Ok(false) => bail!("Required file doesn't exist: {}", zuliprc_path.display()),
-            // Can't check if file exists at path, permissions error
-            Err(_) => bail!(
-                "Not permitted to check if file exists: {}",
-                zuliprc_path.display()
-            ),
-        },
-    };
-
-    // Practically the same as the above (DRY potential)
-    let config: Config = match args.config {
-        Some(path) => toml::from_str(&fs::read_to_string(path)?)?,
-        None => match config_path.try_exists() {
-            Ok(true) => toml::from_str(&fs::read_to_string(config_path)?)?,
-            Ok(false) => bail!("Required file doesn't exist: {}", config_path.display()),
-            Err(_) => bail!(
-                "Not permitted to check if file exists: {}",
-                config_path.display()
-            ),
-        },
-    };
-
+    let (config, zuliprc) = get_config_and_zuliprc(args.config, args.zuliprc)?;
     let (skip_start, skip_end) = match args.skip {
         Some(skip) => match skip {
             SkipPhase::Start => (true, false),
@@ -136,7 +148,6 @@ async fn main() -> Result<(), Error> {
     };
 
     let mut rng = rand::thread_rng();
-
     let email = zuliprc.api.email;
     let key = zuliprc.api.key;
     let status = ZulipStatus::new(zuliprc.api.site, email, key);
