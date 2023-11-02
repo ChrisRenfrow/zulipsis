@@ -30,6 +30,9 @@ struct Cli {
     /// Skip sending the start and/or pause statuses
     #[arg(short, long)]
     skip: Option<SkipPhase>,
+    /// Print default config (e.g. to redirect to `~/.config/zulipsis/config.toml`)
+    #[arg(long)]
+    default_config: bool,
     #[command(flatten)]
     verbose: Verbosity<InfoLevel>,
 }
@@ -82,7 +85,11 @@ fn get_config(path: PathBuf) -> Result<Config, Error> {
             Ok(config) => Ok(config),
             Err(e) => Err(anyhow!("Problem parsing config: {e}")),
         },
-        Ok(false) => bail!("Specified file does not exist: {}", path.display()),
+        Ok(false) => bail!(
+            r#"Specified file does not exist: {}
+Run with --default-config to print a sensible default configuration"#,
+            path.display()
+        ),
         Err(_) => bail!("Not permitted to check if file exists: {}", path.display()),
     }
 }
@@ -93,7 +100,11 @@ fn get_zuliprc(path: PathBuf) -> Result<ZulipRc, Error> {
             Ok(zuliprc) => Ok(zuliprc),
             Err(e) => Err(anyhow!("Problem parsing zuliprc: {e}")),
         },
-        Ok(false) => bail!("Specified file does not exist: {}", path.display()),
+        Ok(false) => bail!(
+            r#"Specified file does not exist: {}
+Refer to https://zulip.com/api/api-keys#get-your-api-key to learn how to find your zuliprc"#,
+            path.display()
+        ),
         Err(_) => bail!("Not permitted to check if file exists: {}", path.display()),
     }
 }
@@ -181,6 +192,12 @@ async fn main() -> Result<(), Error> {
     // TODO: Prompt to create config path on first run?
     //       Maybe also Zulip login inline (like zulip cli client) to fetch zuliprc?
     //       ty @erikareads
+    if args.default_config {
+        // Print the config and exit
+        let default_cfg = Config::default();
+        print!("{}", toml::to_string(&default_cfg).unwrap());
+        return Ok(());
+    }
 
     let (config, zuliprc) = get_config_and_zuliprc(args.config, args.zuliprc)?;
     let (skip_start, skip_end) = match args.skip {

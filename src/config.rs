@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub general: General,
     pub phrases: Phrases,
     pub emoji: Emoji,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct General {
     pub cycle_duration_seconds: u64,
 }
@@ -26,11 +26,42 @@ pub enum Phrase {
     Emoji((String, String)),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Emoji {
     pub start: String,
     pub working: String,
     pub pause: String,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            general: General {
+                cycle_duration_seconds: 300,
+            },
+            phrases: Phrases {
+                start: vec![
+                    Phrase::Basic("getting started".to_string()),
+                    Phrase::Emoji(("waking-up".to_string(), "sunrise".to_string())),
+                    Phrase::Emoji(("catching-up on zulip".to_string(), "zulip".to_string())),
+                ],
+                working: vec![
+                    Phrase::Basic("working".to_string()),
+                    Phrase::Emoji(("thinking".to_string(), "brain".to_string())),
+                    Phrase::Basic("reading the docs".to_string()),
+                ],
+                pause: vec![
+                    Phrase::Basic("taking a break".to_string()),
+                    Phrase::Emoji(("afk".to_string(), "keyboard".to_string())),
+                ],
+            },
+            emoji: Emoji {
+                start: "start".to_string(),
+                working: "tools".to_string(),
+                pause: "zzz".to_string(),
+            },
+        }
+    }
 }
 
 #[cfg(test)]
