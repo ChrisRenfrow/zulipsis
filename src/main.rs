@@ -1,48 +1,25 @@
 use anyhow::{anyhow, bail, Error, Result};
-use clap::{Parser, ValueEnum};
-use clap_verbosity_flag::{InfoLevel, Verbosity};
-use crossbeam_channel::{bounded, select, tick, Receiver};
-use log::{debug, info};
-use rand::{rngs::ThreadRng, Rng};
+use clap::Parser;
 
+use cli::{Cli, SkipPhase};
+use crossbeam_channel::{bounded, select, tick, Receiver};
+use log::info;
 use std::{
     fs,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
+mod cli;
 mod config;
 mod zulip_status;
 mod zuliprc;
+mod zulipsis;
 
-use config::{Config, Phrase};
-use zulip_status::{Emoji, ZulipStatus};
+use config::Config;
+use zulip_status::ZulipStatus;
 use zuliprc::ZulipRc;
-
-#[derive(Parser)]
-struct Cli {
-    /// The path to zuliprc
-    #[arg(short, long)]
-    zuliprc: Option<String>,
-    /// The path to the config
-    #[arg(short, long)]
-    config: Option<String>,
-    /// Skip sending the start and/or pause statuses
-    #[arg(short, long)]
-    skip: Option<SkipPhase>,
-    /// Print default config (e.g. to redirect to `~/.config/zulipsis/config.toml`)
-    #[arg(long)]
-    default_config: bool,
-    #[command(flatten)]
-    verbose: Verbosity<InfoLevel>,
-}
-
-#[derive(Debug, Clone, PartialEq, ValueEnum)]
-enum SkipPhase {
-    Start,
-    Pause,
-    Both,
-}
+use zulipsis::{Phase, Zulipsis};
 
 fn ctrl_channel() -> Result<Receiver<()>, ctrlc::Error> {
     let (sender, receiver) = bounded(100);
@@ -51,20 +28,6 @@ fn ctrl_channel() -> Result<Receiver<()>, ctrlc::Error> {
     })?;
 
     Ok(receiver)
-}
-
-fn pick_one<T>(rng: &mut impl Rng, list: &[T]) -> T
-where
-    T: Clone,
-{
-    list[rng.gen_range(0..list.len())].clone()
-}
-
-fn phrase_with_emoji_or_default(phrase: Phrase, default_emoji: Emoji) -> (String, Emoji) {
-    match phrase {
-        Phrase::Basic(phrase_str) => (phrase_str, default_emoji),
-        Phrase::Emoji((phrase_str, emoji_str)) => (phrase_str, Emoji::Name(emoji_str)),
-    }
 }
 
 fn get_config_home() -> PathBuf {
@@ -135,51 +98,6 @@ fn get_config_and_zuliprc(
             }
         },
     ))
-}
-
-#[derive(Debug)]
-enum Phase {
-    Start,
-    Working,
-    Pause,
-}
-
-struct Zulipsis {
-    rng: ThreadRng,
-    config: Config,
-    status: ZulipStatus,
-}
-
-impl Zulipsis {
-    fn new(config: Config, status: ZulipStatus) -> Self {
-        Self {
-            rng: rand::thread_rng(),
-            config,
-            status,
-        }
-    }
-
-    async fn set_status_for_phase(&mut self, phase: Phase) -> Result<(), Error> {
-        let (phrase, emoji) = match phase {
-            Phase::Start => phrase_with_emoji_or_default(
-                pick_one(&mut self.rng, &self.config.phrases.start),
-                Emoji::Name(self.config.emoji.start.clone()),
-            ),
-            Phase::Working => phrase_with_emoji_or_default(
-                pick_one(&mut self.rng, &self.config.phrases.working),
-                Emoji::Name(self.config.emoji.working.clone()),
-            ),
-            Phase::Pause => phrase_with_emoji_or_default(
-                pick_one(&mut self.rng, &self.config.phrases.pause),
-                Emoji::Name(self.config.emoji.pause.clone()),
-            ),
-        };
-        info!("Sending {:?} status: {}", phase, &phrase);
-        match self.status.set(&phrase, Some(emoji), false).await {
-            Ok(response) => Ok(debug!("Response: {}", response.status())),
-            Err(e) => bail!("Problem sending status: {e}"),
-        }
-    }
 }
 
 #[tokio::main]
