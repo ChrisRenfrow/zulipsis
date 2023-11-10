@@ -1,8 +1,8 @@
 # Zulipsis
 
-A silly program that randomly changes your Zulip status at a defined interval. The selection of phrases is configurable and organized into three categories, "start", "pause", and "working", each with a corresponding configurable emoji name. When the program starts, one "start" phrase is selected and sent. Then, at the configured interval, a new "working" phrase is selected and sent. When the program is interrupted (Ctrl+C), one last phrase is selected from the "pause" category and sent.
+A program that randomly selects a new Zulip status from a pool of phrases at a defined interval. The selection of phrases is configurable and organized into three categories, "start", "pause", and "working", each with a corresponding configurable emoji name. When the program starts, one "start" phrase is selected and sent. Then, at the configured interval, a new "working" phrase is selected and sent. When the program is interrupted (Ctrl+C), one last phrase is selected from the "pause" category and sent.
 
-**Example:**
+**Example Output:**
 
 ``` txt
 [2023-10-19T19:32:30Z INFO  zulipsis] Sending working status: Sipping coffee...
@@ -17,7 +17,8 @@ Later...
 ```
 
 ## Disclaimer
-Use this software at your own discretion. At the time of writing I've spent only a few hours writing this, there are likely bugs. This program makes use of your personal Zulip access key, which is effectively a password to your Zulip account to potentially perform destructive operations on your behalf. I encourage you to read the code before running. If you have any questions or concerns please feel free to open a new issue or send me an email.
+
+Use this software at your own discretion. There are likely bugs. This program makes use of your personal Zulip access key, which is effectively a password to your Zulip account that allows potentially destructive operations on your behalf. I encourage you to read the code before running. If you have any questions or concerns please feel free to open a new issue or send me an email explaining the issue.
 
 ## Usage
 
@@ -28,6 +29,7 @@ Options:
   -z, --zuliprc <ZULIPRC>  The path to zuliprc
   -c, --config <CONFIG>    The path to the config
   -s, --skip <SKIP>        Skip sending the start and/or pause statuses [possible values: start, pause, both]
+      --default-config     Print default config (e.g. to redirect to `~/.config/zulipsis/config.toml`)
   -v, --verbose...         More output per occurrence
   -q, --quiet...           Less output per occurrence
   -h, --help               Print help
@@ -42,46 +44,38 @@ Options:
 
 **Note:** You may have to enclose the values in quotation marks as mine were not enclosed and that's not valid TOML according to the parser I'm using.
 
-### No default config? What gives?
+### Where can I find a default config?
+Use the `--default-config` argument to print out a basic default to, for example, redirect to a file located at the default config path, like this: `zulipsis --default-config > ~/.config/zulipsis/config.toml`
 
-I haven't added a default configuration yet (sorry). Here's an example you can copy/paste.
+Here it is, annotated to explain the purpose of each section:
 
 ``` toml
 [general]
-cycle_duration_seconds = 300 # 5 minutes
+# How frequently the status gets cycled in seconds
+cycle_duration_seconds = 300
 
 [phrases]
-# The initial status to set before cycling over the "working" list
-# Sets away to false
+# The phrases selected when you start zulipsis
 start = [
-	"Initializing...",
-	"Loading...",
-	"Network connection established...",
-	"Brewing coffee...",
-	"Reticulating splines...",
+  # You may supply a basic text phrase like this
+  "getting started",
+  # Or provide the phrase and the name of an emoji like this to override the default (see below)
+  ["waking-up", "sunrise"],
+  ["catching-up on zulip", "zulip"]
 ]
-# The list of phrases cycled through when online.
-# Cycles periodically.
-# Sets away to false.
+# The phrases cycled through as zulipsis continues to run
 working = [
-	"Processing...",
-	["Sipping coffee...", "coffee"], # Specify the name of a unique emoji for any phrase like this.
-	["Thinking hard...", "brain"],
-	"Reading the error...",
-	"Reading the manual...",
-    "Listening to the compiler...",
+  "working", 
+  ["thinking", "brain"], 
+  "reading the docs"
 ]
-# The list of phrases to select from as a parting status.
-# Does not cycle.
-# Sets status as away.
+# The phrases selected when the program receives an interrupt (Ctrl+C)
 pause = [
-	"Suspending...",
-	"Hibernating...",
-	"Touching grass...",
-	"Taking a break...",
+  "taking a break", 
+  ["afk", "keyboard"]
 ]
 
-# The name of the emoji to use by default for each state
+# The names of the emoji to use by default during each phase
 [emoji]
 start = "start"
 working = "tools"
@@ -96,10 +90,9 @@ pause = "zzz"
   - e.g. `["Rewriting it in Rust...", "ferris"]`
 - [x] Add options to control output (--verbose)
 - [x] Add default configuration search paths (making --config and --zuliprc optional)
-- [ ] Add argument to generate default configuration
+- [x] Add argument to generate default configuration
 - [ ] Optionally retry when encountering (potentially) temporary network interference
-- [ ] Respond to SIGKILL like it responds to SIGINT
-  - [ ] Abort if receiving more than one SIGINT/SIGKILL
+- ~~[ ] Respond to SIGKILL like it responds to SIGINT~~ Abandoned, SIGKILL cannot/should-not be subscribed to
 
 **Maybe:**
 
